@@ -1,6 +1,14 @@
-import * as bcrypt from 'bcryptjs';
-import { createUser, getCurrentUser, login, updateUser } from '../../app/routes/auth/auth.service';
+// prisma-mock MUST be imported before any module that transitively loads the
+// real Prisma client, otherwise jest.mock() runs too late and the real client
+// is used (causing DATABASE_URL errors in CI).
 import prismaMock from '../prisma-mock';
+import * as bcrypt from 'bcryptjs';
+import {
+  createUser,
+  getCurrentUser,
+  login,
+  updateUser,
+} from '../../app/routes/auth/auth.service';
 
 describe('AuthService', () => {
   describe('createUser', () => {

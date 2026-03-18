@@ -38,10 +38,18 @@ app.use(
       });
       // @ts-ignore
     } else if (err && err.errorCode) {
+      // Intentional HttpException: message is a structured, curated payload
+      // (e.g. { errors: { email: [...] } }) safe to expose.
       // @ts-ignore
       res.status(err.errorCode).json(err.message);
     } else if (err) {
-      res.status(500).json(err.message);
+      // SECURITY: never leak raw exception messages (Prisma internals, file
+      // paths, stack fragments) to clients. Log full detail server-side only.
+      console.error('[unhandled]', err);
+      res.status(500).json({
+        status: 'error',
+        message: 'Internal Server Error',
+      });
     }
   },
 );

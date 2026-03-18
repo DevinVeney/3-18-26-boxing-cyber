@@ -13,7 +13,7 @@ const router = Router();
  */
 router.post('/users', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await createUser({ ...req.body.user, demo: false });
+    const user = await createUser({ ...(req.body.user || {}), demo: false });
     res.status(201).json({ user });
   } catch (error) {
     next(error);
@@ -29,7 +29,7 @@ router.post('/users', async (req: Request, res: Response, next: NextFunction) =>
  */
 router.post('/users/login', async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await login(req.body.user);
+    const user = await login(req.body.user || {});
     res.json({ user });
   } catch (error) {
     next(error);
@@ -60,7 +60,7 @@ router.get('/user', auth.required, async (req: Request, res: Response, next: Nex
  */
 router.put('/user', auth.required, async (req: Request, res: Response, next: NextFunction) => {
   try {
-    const user = await updateUser(req.body.user, req.auth?.user?.id);
+    const user = await updateUser(req.body.user || {}, req.auth?.user?.id);
     res.json({ user });
   } catch (error) {
     next(error);

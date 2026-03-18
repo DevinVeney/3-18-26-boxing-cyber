@@ -6,6 +6,30 @@ import { RegisteredUser } from './registered-user.model';
 import generateToken from './token.utils';
 import { User } from './user.model';
 
+/**
+ * SECURITY: The `image` field is rendered by RealWorld frontends both in
+ * <img src> and in navigable contexts (<a href> on the settings page).
+ * Without scheme validation an attacker can store `javascript:...` or
+ * `data:text/html;base64,...` payloads that execute in every visitor's
+ * browser. We allow-list http/https only; empty/absent values fall through
+ * so the Prisma schema default still applies.
+ */
+const validateImageUrl = (image: unknown): void => {
+  if (image === undefined || image === null || image === '') return;
+  if (typeof image !== 'string') {
+    throw new HttpException(422, { errors: { image: ['must be a string'] } });
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(image);
+  } catch {
+    throw new HttpException(422, { errors: { image: ['must be a valid URL'] } });
+  }
+  if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
+    throw new HttpException(422, { errors: { image: ['must be an http(s) URL'] } });
+  }
+};
+
 const checkUserUniqueness = async (email: string, username: string) => {
   const existingUserByEmail = await prisma.user.findUnique({
     where: {
@@ -52,6 +76,8 @@ export const createUser = async (input: RegisterInput): Promise<RegisteredUser> 
   if (!password) {
     throw new HttpException(422, { errors: { password: ["can't be blank"] } });
   }
+
+  validateImageUrl(image);
 
   await checkUserUniqueness(email, username);
 
@@ -151,6 +177,8 @@ export const getCurrentUser = async (id: number) => {
 export const updateUser = async (userPayload: any, id: number) => {
   const { email, username, password, image, bio } = userPayload;
   let hashedPassword;
+
+  validateImageUrl(image);
 
   if (password) {
     hashedPassword = await bcrypt.hash(password, 10);

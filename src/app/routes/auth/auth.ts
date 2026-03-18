@@ -1,5 +1,6 @@
 import { expressjwt as jwt } from 'express-jwt';
 import * as express from 'express';
+import { getJwtSecret } from './token.utils';
 
 const getTokenFromHeaders = (req: express.Request): string | null => {
   if (
@@ -11,14 +12,19 @@ const getTokenFromHeaders = (req: express.Request): string | null => {
   return null;
 };
 
+// Resolve once at module load. If JWT_SECRET is missing in a non-test
+// environment, getJwtSecret() throws and the process refuses to start
+// rather than silently accepting forgeable tokens.
+const secret = getJwtSecret();
+
 const auth = {
   required: jwt({
-    secret: process.env.JWT_SECRET || 'superSecret',
+    secret,
     getToken: getTokenFromHeaders,
     algorithms: ['HS256'],
   }),
   optional: jwt({
-    secret: process.env.JWT_SECRET || 'superSecret',
+    secret,
     credentialsRequired: false,
     getToken: getTokenFromHeaders,
     algorithms: ['HS256'],

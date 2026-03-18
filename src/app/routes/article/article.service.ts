@@ -5,6 +5,35 @@ import profileMapper from '../profile/profile.utils';
 import articleMapper from './article.mapper';
 import { Tag } from '../tag/tag.model';
 
+/**
+ * SECURITY: req.query values can be objects/arrays when extended URL-encoded
+ * parsing is enabled (e.g. `?tag[not]=x` -> `{ not: 'x' }`). Passing such
+ * objects directly into Prisma filter positions lets an attacker inject
+ * operators like `not`, `contains`, `startsWith` to bypass or invert filters.
+ * We coerce to a primitive string and reject anything else.
+ */
+const asString = (value: unknown): string | undefined => {
+  if (typeof value === 'string') return value;
+  return undefined;
+};
+
+/**
+ * SECURITY: clamp pagination to prevent full-table scans. Each article row
+ * hydrates `favoritedBy: true` (full User records) so an unbounded limit is
+ * a memory-exhaustion DoS vector.
+ */
+const clampLimit = (raw: unknown): number => {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n <= 0) return 10;
+  return Math.min(Math.floor(n), 100);
+};
+
+const clampOffset = (raw: unknown): number => {
+  const n = Number(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.floor(n);
+};
+
 const buildFindAllQuery = (query: any, id: number | undefined) => {
   const queries: any = [];
   const orAuthorQuery = [];
@@ -24,10 +53,11 @@ const buildFindAllQuery = (query: any, id: number | undefined) => {
     });
   }
 
-  if ('author' in query) {
+  const author = asString(query.author);
+  if (author !== undefined) {
     andAuthorQuery.push({
       username: {
-        equals: query.author,
+        equals: author,
       },
     });
   }
@@ -41,22 +71,24 @@ const buildFindAllQuery = (query: any, id: number | undefined) => {
 
   queries.push(authorQuery);
 
-  if ('tag' in query) {
+  const tag = asString(query.tag);
+  if (tag !== undefined) {
     queries.push({
       tagList: {
         some: {
-          name: query.tag,
+          name: tag,
         },
       },
     });
   }
 
-  if ('favorited' in query) {
+  const favorited = asString(query.favorited);
+  if (favorited !== undefined) {
     queries.push({
       favoritedBy: {
         some: {
           username: {
-            equals: query.favorited,
+            equals: favorited,
           },
         },
       },
@@ -79,8 +111,8 @@ export const getArticles = async (query: any, id?: number) => {
     orderBy: {
       createdAt: 'desc',
     },
-    skip: Number(query.offset) || 0,
-    take: Number(query.limit) || 10,
+    skip: clampOffset(query.offset),
+    take: clampLimit(query.limit),
     include: {
       tagList: {
         select: {
@@ -111,6 +143,8 @@ export const getArticles = async (query: any, id?: number) => {
 };
 
 export const getFeed = async (offset: number, limit: number, id: number) => {
+  const safeOffset = clampOffset(offset);
+  const safeLimit = clampLimit(limit);
   const articlesCount = await prisma.article.count({
     where: {
       author: {
@@ -128,8 +162,8 @@ export const getFeed = async (offset: number, limit: number, id: number) => {
     orderBy: {
       createdAt: 'desc',
     },
-    skip: offset || 0,
-    take: limit || 10,
+    skip: safeOffset,
+    take: safeLimit,
     include: {
       tagList: {
         select: {
